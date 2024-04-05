@@ -22,13 +22,19 @@
 #include "protocol.h"
 #include <math.h>
 
-static const struct cypress_fx10_profile supported_fx10[] = {
+static const struct cypress_fx10_profile supported_fx10_dev[] = {
 	/*
 	 * Cypress FX10
 	 */
-	{ 0x04b4, 0x1234, "Cypress", "FX10", NULL,
+	{ 0x04b4, 0xF007, "Cypress", "FX10", NULL,
+		"cypress-fx10.fw",
+		DEV_CAPS_8BIT, NULL, NULL},
+	{ 0x04b4, 0xF00F, "Cypress", "FX10", NULL,
 		"cypress-fx10.fw",
 		DEV_CAPS_16BIT, NULL, NULL},
+	{ 0x04b4, 0xF01F, "Cypress", "FX10", NULL,
+		"cypress-fx10.fw",
+		DEV_CAPS_32BIT, NULL, NULL},
 
 	ALL_ZERO
 };
@@ -66,17 +72,19 @@ static const uint64_t samplerates[] = {
 	SR_MHZ(10),
 	SR_MHZ(25),
 	SR_MHZ(50),
-	SR_MHZ(100), 
+	SR_MHZ(80),
+	SR_MHZ(100),
+	SR_MHZ(160), 
 };
 
 static gboolean is_plausible(const struct libusb_device_descriptor *des)
 {
 	int i;
 
-	for (i = 0; supported_fx10[i].vid; i++) {
-		if (des->idVendor != supported_fx10[i].vid)
+	for (i = 0; supported_fx10_dev[i].vid; i++) {
+		if (des->idVendor != supported_fx10_dev[i].vid)
 			continue;
-		if (des->idProduct == supported_fx10[i].pid)
+		if (des->idProduct == supported_fx10_dev[i].pid)
 			return TRUE;
 	}
 
@@ -186,14 +194,14 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 			continue;
 		
 		prof = NULL;
-		for (j = 0; supported_fx10[j].vid; j++) {
-			if (des.idVendor == supported_fx10[j].vid &&
-					des.idProduct == supported_fx10[j].pid &&
-					(!supported_fx10[j].usb_manufacturer ||
-					 !strcmp(manufacturer, supported_fx10[j].usb_manufacturer)) &&
-					(!supported_fx10[j].usb_product ||
-					 !strcmp(product, supported_fx10[j].usb_product))) {
-				prof = &supported_fx10[j];
+		for (j = 0; supported_fx10_dev[j].vid; j++) {
+			if (des.idVendor == supported_fx10_dev[j].vid &&
+					des.idProduct == supported_fx10_dev[j].pid &&
+					(!supported_fx10_dev[j].usb_manufacturer ||
+					 !strcmp(manufacturer, supported_fx10_dev[j].usb_manufacturer)) &&
+					(!supported_fx10_dev[j].usb_product ||
+					 !strcmp(product, supported_fx10_dev[j].usb_product))) {
+				prof = &supported_fx10_dev[j];
 				break;
 			}
 		}
@@ -210,31 +218,32 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		sdi->connection_id = g_strdup(connection_id);
 
 		/* Fill in channellist according to this device's profile. */
-		num_logic_channels = prof->dev_caps & DEV_CAPS_16BIT ? 16 : 8;
-		num_analog_channels = prof->dev_caps & DEV_CAPS_AX_ANALOG ? 1 : 0;
+		num_logic_channels = prof->dev_caps;
+		// num_analog_channels = prof->dev_caps & DEV_CAPS_AX_ANALOG ? 1 : 0;
 
 		/* Logic channels, all in one channel group. */
-		cg = g_malloc0(sizeof(struct sr_channel_group));
-		cg->name = g_strdup("Logic");
+		// cg = g_malloc0(sizeof(struct sr_channel_group));
+		// cg->name = g_strdup("Logic");
+		cg = sr_channel_group_new(sdi, "Logic", NULL);
 		for (j = 0; j < num_logic_channels; j++) {
 			sprintf(channel_name, "D%d", j);
 			ch = sr_channel_new(sdi, j, SR_CHANNEL_LOGIC,
 						TRUE, channel_name);
 			cg->channels = g_slist_append(cg->channels, ch);
 		}
-		sdi->channel_groups = g_slist_append(NULL, cg);
+		// sdi->channel_groups = g_slist_append(NULL, cg);
 
-		for (j = 0; j < num_analog_channels; j++) {
-			snprintf(channel_name, 16, "A%d", j);
-			ch = sr_channel_new(sdi, j + num_logic_channels,
-					SR_CHANNEL_ANALOG, TRUE, channel_name);
+		// for (j = 0; j < num_analog_channels; j++) {
+		// 	snprintf(channel_name, 16, "A%d", j);
+		// 	ch = sr_channel_new(sdi, j + num_logic_channels,
+		// 			SR_CHANNEL_ANALOG, TRUE, channel_name);
 
-			/* Every analog channel gets its own channel group. */
-			cg = g_malloc0(sizeof(struct sr_channel_group));
-			cg->name = g_strdup(channel_name);
-			cg->channels = g_slist_append(NULL, ch);
-			sdi->channel_groups = g_slist_append(sdi->channel_groups, cg);
-		}
+		// 	/* Every analog channel gets its own channel group. */
+		// 	cg = g_malloc0(sizeof(struct sr_channel_group));
+		// 	cg->name = g_strdup(channel_name);
+		// 	cg->channels = g_slist_append(NULL, ch);
+		// 	sdi->channel_groups = g_slist_append(sdi->channel_groups, cg);
+		// }
 
 		devc = cypress_fx10_dev_new();
 		devc->profile = prof;
@@ -253,26 +262,27 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 			sdi->conn = sr_usb_dev_inst_new(libusb_get_bus_number(devlist[i]),
 					libusb_get_device_address(devlist[i]), NULL);
 		} else {
-			if (ezusb_upload_firmware_fx10(drvc->sr_ctx, devlist[i],
-					USB_CONFIGURATION, prof->firmware) == SR_OK) {
-				/* Store when this device's FW was updated. */
-				devc->fw_updated = g_get_monotonic_time();
-				/*Add delay for the device to re-enumerat in SuperSpeed*/
-				g_usleep(1000 * 1000);
-				devices = g_slist_remove(devices, sdi);
-				/* Rescan and refresh the device list. 
-				   This is needed as the device renumerates as a SuperSpeed device */
-				libusb_get_device_list(drvc->sr_ctx->libusb_ctx, &devlist);
-				/* Restart the iteration */
-				i = 0;
-				continue;
-			} else {
-				sr_err("Firmware upload failed for "
-				       "device %d.%d (logical), name %s.",
-				       libusb_get_bus_number(devlist[i]),
-				       libusb_get_device_address(devlist[i]),
-				       prof->firmware);
-			}
+			sr_err("FX10 Firmware not found (sigrok) (cypress-fx10).. ");
+			// if (ezusb_upload_firmware_fx10(drvc->sr_ctx, devlist[i],
+			// 		USB_CONFIGURATION, prof->firmware) == SR_OK) {
+			// 	/* Store when this device's FW was updated. */
+			// 	devc->fw_updated = g_get_monotonic_time();
+			// 	/*Add delay for the device to re-enumerat in SuperSpeed*/
+			// 	g_usleep(1000 * 1000);
+			// 	devices = g_slist_remove(devices, sdi);
+			// 	/* Rescan and refresh the device list. 
+			// 	   This is needed as the device renumerates as a SuperSpeed device */
+			// 	libusb_get_device_list(drvc->sr_ctx->libusb_ctx, &devlist);
+			// 	/* Restart the iteration */
+			// 	i = 0;
+			// 	continue;
+			// } else {
+			// 	sr_err("Firmware upload failed for "
+			// 	       "device %d.%d (logical), name %s.",
+			// 	       libusb_get_bus_number(devlist[i]),
+			// 	       libusb_get_device_address(devlist[i]),
+			// 	       prof->firmware);
+			// }
 			sdi->inst_type = SR_INST_USB;
 			sdi->conn = sr_usb_dev_inst_new(libusb_get_bus_number(devlist[i]),
 					0xff, NULL);
@@ -491,12 +501,6 @@ static int config_list(uint32_t key, GVariant **data,
 	return SR_OK;
 }
 
-static int cypress_fx10_acquisition_stop(struct sr_dev_inst *sdi)
-{
-	cypress_fx10_abort_acquisition(sdi->priv);
-
-	return SR_OK;
-}
 
 static struct sr_dev_driver cypress_fx10_driver_info = {
 	.name = "cypress-fx10",

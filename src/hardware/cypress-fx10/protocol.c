@@ -32,6 +32,9 @@ struct version_info {
 struct cmd_start_acquisition {
 	uint16_t sampling_factor;
 };
+struct cmd_stop_acquisition {
+	uint8_t stop_info;
+};
 
 #pragma pack(pop)
 
@@ -106,6 +109,29 @@ static int command_start_acquisition(const struct sr_dev_inst *sdi)
 		return SR_ERR;
 	}else{
 		sr_info("CMD_START vendor command sent successfully");
+	}
+
+	return SR_OK;
+}
+
+static int command_stop_acquisition(const struct sr_dev_inst *sdi)
+{
+	struct sr_usb_dev_inst *usb;
+	uint64_t samplerate;
+	struct cmd_stop_acquisition cmd;
+	int ret;
+	usb = sdi->conn;
+	cmd.stop_info = 0;
+	/* Send the control message. */
+	ret = libusb_control_transfer(usb->devhdl, LIBUSB_REQUEST_TYPE_VENDOR |
+			LIBUSB_ENDPOINT_OUT, CMD_STOP, 0x0000, 0x0000,
+			(unsigned char *)&cmd, sizeof(cmd), USB_TIMEOUT);
+	if (ret < 0) {
+		sr_err("Unable to send start command: %s.",
+		       libusb_error_name(ret));
+		return SR_ERR;
+	}else{
+		sr_info("CMD_STOP vendor command sent successfully");
 	}
 
 	return SR_OK;
@@ -721,10 +747,22 @@ SR_PRIV int cypress_fx10_start_acquisition(const struct sr_dev_inst *sdi)
 			sizeof(float) * size / 2);
 	}
 	start_transfers(sdi);
+	if ((ret = command_stop_acquisition(sdi)) != SR_OK) {
+		return ret;
+	}
+
 	if ((ret = command_start_acquisition(sdi)) != SR_OK) {
 		cypress_fx10_abort_acquisition(devc);
 		return ret;
 	}
+
+	return SR_OK;
+}
+
+SR_PRIV int cypress_fx10_acquisition_stop(struct sr_dev_inst *sdi)
+{
+	command_stop_acquisition(sdi);
+	cypress_fx10_abort_acquisition(sdi->priv);
 
 	return SR_OK;
 }

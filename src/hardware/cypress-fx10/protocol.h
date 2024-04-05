@@ -38,27 +38,33 @@
 #define NUM_SIMUL_TRANSFERS	32
 #define MAX_EMPTY_TRANSFERS	(NUM_SIMUL_TRANSFERS * 2)
 
-#define NUM_CHANNELS		16
+#define NUM_CHANNELS		32
 
 #define FX10_REQUIRED_VERSION_MAJOR	1
 
 #define MAX_8BIT_SAMPLE_RATE	SR_MHZ(24)
-#define MAX_16BIT_SAMPLE_RATE	SR_MHZ(100)
+#define MAX_16BIT_SAMPLE_RATE	SR_MHZ(160)
+#define MAX_32BIT_SAMPLE_RATE	SR_MHZ(160)
 #define FX10_PIB_CLOCK			SR_MHZ(400)
 
 /* 6 delay states of up to 256 clock ticks */
 #define MAX_SAMPLE_DELAY	(6 * 256)
 
-#define DEV_CAPS_16BIT_POS	0
+#define DEV_CAPS_8BIT_POS	3
+#define DEV_CAPS_16BIT_POS	4
+#define DEV_CAPS_32BIT_POS	5
 #define DEV_CAPS_AX_ANALOG_POS	1
 
+#define DEV_CAPS_8BIT		(1 << DEV_CAPS_8BIT_POS)
 #define DEV_CAPS_16BIT		(1 << DEV_CAPS_16BIT_POS)
+#define DEV_CAPS_32BIT		(1 << DEV_CAPS_32BIT_POS)
 #define DEV_CAPS_AX_ANALOG	(1 << DEV_CAPS_AX_ANALOG_POS)
 
 /* Protocol commands */
 #define CMD_GET_FW_VERSION		    (0xb0)
-#define CMD_START			        (0xb1)
-#define CMD_GET_REVID_VERSION		(0xb2)
+#define CMD_GET_REVID_VERSION		(0xb1)
+#define CMD_START			        (0xb2)
+#define CMD_STOP			        (0xb3)
 
 #define CMD_START_FLAGS_CLK_CTL2_POS	4
 #define CMD_START_FLAGS_WIDE_POS	5
@@ -130,6 +136,7 @@ struct dev_context {
 SR_PRIV int cypress_fx10_dev_open(struct sr_dev_inst *sdi, struct sr_dev_driver *di);
 SR_PRIV struct dev_context *cypress_fx10_dev_new(void);
 SR_PRIV int cypress_fx10_start_acquisition(const struct sr_dev_inst *sdi);
+SR_PRIV int cypress_fx10_acquisition_stop(struct sr_dev_inst *sdi);
 SR_PRIV void cypress_fx10_abort_acquisition(struct dev_context *devc);
 
 #endif
