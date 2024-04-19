@@ -74,7 +74,10 @@ static const uint64_t samplerates[] = {
 	SR_MHZ(50),
 	SR_MHZ(80),
 	SR_MHZ(100),
-	SR_MHZ(160), 
+	SR_MHZ(160),
+	SR_MHZ(200),
+	SR_MHZ(264),
+	SR_MHZ(320),
 };
 
 static gboolean is_plausible(const struct libusb_device_descriptor *des)
